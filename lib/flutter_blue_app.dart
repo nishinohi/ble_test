@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:flutter_blue/flutter_blue.dart';
 import 'package:flutter_blue_example/widgets.dart';
 import 'timer_settting.dart';
+import 'ble_util.dart';
 
 class FlutterBlueApp extends StatefulWidget {
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
@@ -11,184 +11,80 @@ class FlutterBlueApp extends StatefulWidget {
   final String title;
 
   @override
-  _FlutterBlueAppState createState() => new _FlutterBlueAppState();
+  _FlutterBlueAppState createState() => new _FlutterBlueAppState(bleUtil: new BleUtil());
 }
 
 class _FlutterBlueAppState extends State<FlutterBlueApp> {
-  FlutterBlue _flutterBlue = FlutterBlue.instance;
+  _FlutterBlueAppState({Key key, this.bleUtil});
 
-  /// Scanning
-  StreamSubscription _scanSubscription;
-  Map<DeviceIdentifier, ScanResult> scanResults = new Map();
-  bool isScanning = false;
-
-  /// State
-  StreamSubscription _stateSubscription;
-  BluetoothState state = BluetoothState.unknown;
-
-  /// Device
-  BluetoothDevice device;
-  bool get isConnected => (device != null);
-  StreamSubscription deviceConnection;
-  StreamSubscription deviceStateSubscription;
-  List<BluetoothService> services = new List();
-  Map<Guid, StreamSubscription> valueChangedSubscriptions = {};
-  BluetoothDeviceState deviceState = BluetoothDeviceState.disconnected;
+  final BleUtil bleUtil;
 
   @override
   void initState() {
     super.initState();
-    // Immediately get the state of FlutterBlue
-    _flutterBlue.state.then((s) {
-      setState(() {
-        state = s;
-      });
-    });
-    // Subscribe to state changes
-    _stateSubscription = _flutterBlue.onStateChanged().listen((s) {
-      setState(() {
-        state = s;
-      });
-    });
+    bleUtil.initState(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _stateSubscription?.cancel();
-    _stateSubscription = null;
-    _scanSubscription?.cancel();
-    _scanSubscription = null;
-    deviceConnection?.cancel();
-    deviceConnection = null;
+    bleUtil.dispose();
     super.dispose();
   }
 
   _startScan() {
-    _scanSubscription = _flutterBlue
-        .scan(
-      timeout: const Duration(seconds: 10),
-      /*withServices: [
-          new Guid('0000180F-0000-1000-8000-00805F9B34FB')
-        ]*/
-    )
-        .listen((scanResult) {
-      print('localName: ${scanResult.advertisementData.localName}');
-      print('manufacturerData: ${scanResult.advertisementData.manufacturerData}');
-      print('serviceData: ${scanResult.advertisementData.serviceData}');
-      setState(() {
-        scanResults[scanResult.device.id] = scanResult;
-      });
-    }, onDone: _stopScan);
-
-    setState(() {
-      isScanning = true;
-    });
+    bleUtil.startScan(() => setState(() {}));
   }
 
   _stopScan() {
-    _scanSubscription?.cancel();
-    _scanSubscription = null;
-    setState(() {
-      isScanning = false;
-    });
+    bleUtil.stopScan();
+    setState(() {});
   }
 
   _connect(BluetoothDevice d) async {
-    device = d;
-    // Connect to device
-    deviceConnection = _flutterBlue.connect(device, timeout: const Duration(seconds: 4)).listen(
-          null,
-          onDone: _disconnect,
-        );
-
-    // Update the connection state immediately
-    device.state.then((s) {
-      setState(() {
-        deviceState = s;
-      });
-    });
-
-    // Subscribe to connection changes
-    deviceStateSubscription = device.onStateChanged().listen((s) {
-      setState(() {
-        deviceState = s;
-      });
-      if (s == BluetoothDeviceState.connected) {
-        device.discoverServices().then((s) {
-          setState(() {
-            services = s;
-          });
-        });
-      }
-    });
+    bleUtil.connect(() => setState(() {}), d);
+    setState(() {});
   }
 
   _disconnect() {
-    // Remove all value changed listeners
-    valueChangedSubscriptions.forEach((uuid, sub) => sub.cancel());
-    valueChangedSubscriptions.clear();
-    deviceStateSubscription?.cancel();
-    deviceStateSubscription = null;
-    deviceConnection?.cancel();
-    deviceConnection = null;
-    setState(() {
-      device = null;
-    });
-  }
-
-  _readCharacteristic(BluetoothCharacteristic c) async {
-    await device.readCharacteristic(c);
+    bleUtil.disconnect();
     setState(() {});
   }
 
-  _writeCharacteristic(BluetoothCharacteristic c) async {
-    await device.writeCharacteristic(c, [0x41, 0x42], type: CharacteristicWriteType.withResponse);
+  _readCharacteristic(BluetoothCharacteristic c) {
+    bleUtil.readCharacteristic(c);
     setState(() {});
   }
 
-  _readDescriptor(BluetoothDescriptor d) async {
-    await device.readDescriptor(d);
+  _writeCharacteristic(BluetoothCharacteristic c) {
+    bleUtil.writeCharacteristic(c);
     setState(() {});
   }
 
-  _writeDescriptor(BluetoothDescriptor d) async {
-    await device.writeDescriptor(d, [0x12, 0x34]);
+  _readDescriptor(BluetoothDescriptor d) {
+    bleUtil.readDescriptor(d);
     setState(() {});
   }
 
-  _setNotification(BluetoothCharacteristic c) async {
-    if (c.isNotifying) {
-      await device.setNotifyValue(c, false);
-      // Cancel subscription
-      valueChangedSubscriptions[c.uuid]?.cancel();
-      valueChangedSubscriptions.remove(c.uuid);
-    } else {
-      await device.setNotifyValue(c, true);
-      // ignore: cancel_subscriptions
-      final sub = device.onValueChanged(c).listen((d) {
-        setState(() {
-          print('onValueChanged $d');
-        });
-      });
-      // Add to map
-      valueChangedSubscriptions[c.uuid] = sub;
-    }
+  _writeDescriptor(BluetoothDescriptor d) {
+    bleUtil.writeDescriptor(d);
+    setState(() {});
+  }
+
+  _setNotification(BluetoothCharacteristic c) {
+    bleUtil.setNotification(c);
     setState(() {});
   }
 
   _refreshDeviceState(BluetoothDevice d) async {
-    var state = await d.state;
-    setState(() {
-      deviceState = state;
-      print('State refreshed: $deviceState');
-    });
+    bleUtil.refreshDeviceState(d);
+    setState(() {});
   }
 
   _buildScanningButton() {
-    if (isConnected || state != BluetoothState.on) {
+    if (bleUtil.isConnected || bleUtil.state != BluetoothState.on) {
       return null;
     }
-    if (isScanning) {
+    if (bleUtil.isScanning) {
       return new FloatingActionButton(
         child: new Icon(Icons.stop),
         onPressed: _stopScan,
@@ -200,7 +96,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   _buildScanResultTiles() {
-    return scanResults.values
+    return bleUtil.scanResults.values
         .map((r) => ScanResultTile(
               result: r,
               onTap: () => _connect(r.device),
@@ -210,7 +106,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
 
   /// 接続したデバイスのサービスを表示
   List<Widget> _buildServiceTiles() {
-    return services
+    return bleUtil.services
         .map(
           (s) => new ServiceTile(
                 service: s,
@@ -239,7 +135,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   List<Widget> _buildActionButtons() {
-    if (isConnected) {
+    if (bleUtil.isConnected) {
       return <Widget>[
         new IconButton(
           icon: const Icon(Icons.cancel),
@@ -255,7 +151,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
       color: Colors.redAccent,
       child: new ListTile(
         title: new Text(
-          'Bluetooth adapter is ${state.toString().substring(15)}',
+          'Bluetooth adapter is ${bleUtil.state.toString().substring(15)}',
           style: Theme.of(context).primaryTextTheme.subhead,
         ),
         trailing: new Icon(
@@ -268,14 +164,14 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
 
   Widget _buildDeviceStateTile() {
     return new ListTile(
-        leading: (deviceState == BluetoothDeviceState.connected)
+        leading: (bleUtil.deviceState == BluetoothDeviceState.connected)
             ? const Icon(Icons.bluetooth_connected)
             : const Icon(Icons.bluetooth_disabled),
-        title: new Text('Device is ${deviceState.toString().split('.')[1]}.'),
-        subtitle: new Text('${device.id}'),
+        title: new Text('Device is ${bleUtil.deviceState.toString().split('.')[1]}.'),
+        subtitle: new Text('${bleUtil.device.id}'),
         trailing: new IconButton(
           icon: const Icon(Icons.refresh),
-          onPressed: () => _refreshDeviceState(device),
+          onPressed: () => _refreshDeviceState(bleUtil.device),
           color: Theme.of(context).iconTheme.color.withOpacity(0.5),
         ));
   }
@@ -292,12 +188,12 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   @override
   Widget build(BuildContext context) {
     var tiles = new List<Widget>();
-    if (state != BluetoothState.on) {
+    if (bleUtil.state != BluetoothState.on) {
       if (!widget.isLayoutTest) {
         tiles.add(_buildAlertTile());
       }
     }
-    if (isConnected) {
+    if (bleUtil.isConnected) {
       tiles.add(_buildDeviceStateTile());
       tiles.add(_buildTimerPicker());
       tiles.addAll(_buildServiceTiles());
@@ -314,7 +210,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
       floatingActionButton: _buildScanningButton(),
       body: new Stack(
         children: <Widget>[
-          (isScanning) ? _buildProgressBarTile() : new Container(),
+          (bleUtil.isScanning) ? _buildProgressBarTile() : new Container(),
           new ListView(
             children: tiles,
           )
