@@ -23,16 +23,16 @@ class BleUtil {
   Map<Guid, StreamSubscription> valueChangedSubscriptions = {};
   BluetoothDeviceState deviceState = BluetoothDeviceState.disconnected;
 
-  void initState(VoidCallback onStateChange) {
+  void initState(VoidCallback onSetState) {
     // Immediately get the state of FlutterBlue
     _flutterBlue.state.then((s) {
       state = s;
-      onStateChange();
+      onSetState();
     });
     // Subscribe to state changes
     _stateSubscription = _flutterBlue.onStateChanged().listen((s) {
       state = s;
-      onStateChange();
+      onSetState();
     });
   }
 
@@ -47,7 +47,7 @@ class BleUtil {
     deviceConnection = null;
   }
 
-  void startScan(VoidCallback onStateChange) {
+  void startScan(VoidCallback onSetState) {
     _scanSubscription = _flutterBlue
         .scan(
       timeout: const Duration(seconds: 10),
@@ -60,11 +60,11 @@ class BleUtil {
       print('manufacturerData: ${scanResult.advertisementData.manufacturerData}');
       print('serviceData: ${scanResult.advertisementData.serviceData}');
       scanResults[scanResult.device.id] = scanResult;
-      onStateChange();
+      onSetState();
     }, onDone: stopScan);
 
     isScanning = true;
-    onStateChange();
+    onSetState();
   }
 
   void stopScan() {
@@ -73,7 +73,7 @@ class BleUtil {
     isScanning = false;
   }
 
-  void connect(VoidCallback onStateChange, BluetoothDevice d) async {
+  void connect(VoidCallback onSetState, BluetoothDevice d) async {
     device = d;
     // Connect to device
     deviceConnection = _flutterBlue.connect(device, timeout: const Duration(seconds: 4)).listen(
@@ -84,18 +84,18 @@ class BleUtil {
     // Update the connection state immediately
     device.state.then((s) {
       deviceState = s;
-      onStateChange();
+      onSetState();
     });
 
     // Subscribe to connection changes
     deviceStateSubscription = device.onStateChanged().listen((s) {
       deviceState = s;
-      onStateChange();
+      onSetState();
 
       if (s == BluetoothDeviceState.connected) {
         device.discoverServices().then((s) {
           services = s;
-          onStateChange();
+          onSetState();
         });
       }
     });
@@ -112,23 +112,23 @@ class BleUtil {
     device = null;
   }
 
-  void readCharacteristic(BluetoothCharacteristic c) async {
+  Future readCharacteristic(BluetoothCharacteristic c) async {
     await device.readCharacteristic(c);
   }
 
-  void writeCharacteristic(BluetoothCharacteristic c) async {
+  Future writeCharacteristic(BluetoothCharacteristic c) async {
     await device.writeCharacteristic(c, [0x41, 0x42], type: CharacteristicWriteType.withResponse);
   }
 
-  void readDescriptor(BluetoothDescriptor d) async {
+  Future readDescriptor(BluetoothDescriptor d) async {
     await device.readDescriptor(d);
   }
 
-  void writeDescriptor(BluetoothDescriptor d) async {
+  Future writeDescriptor(BluetoothDescriptor d) async {
     await device.writeDescriptor(d, [0x12, 0x34]);
   }
 
-  void setNotification(BluetoothCharacteristic c) async {
+  Future setNotification(BluetoothCharacteristic c) async {
     if (c.isNotifying) {
       await device.setNotifyValue(c, false);
       // Cancel subscription
@@ -145,7 +145,7 @@ class BleUtil {
     }
   }
 
-  void refreshDeviceState(BluetoothDevice d) async {
+  Future refreshDeviceState(BluetoothDevice d) async {
     var state = await d.state;
     deviceState = state;
     print('State refreshed: $deviceState');

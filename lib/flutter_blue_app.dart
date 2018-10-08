@@ -7,6 +7,12 @@ import 'ble_util.dart';
 class FlutterBlueApp extends StatefulWidget {
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
 
+  // Service UUID
+  final String trapModuleServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  // Charactaristic UUID
+  final String moduleSettingUuid = "a131c37c-6acb-421d-9640-53bdcd818898";
+  final String moduleInfoUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
   final bool isLayoutTest;
   final String title;
 
@@ -50,33 +56,33 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     setState(() {});
   }
 
-  _readCharacteristic(BluetoothCharacteristic c) {
-    bleUtil.readCharacteristic(c);
+  _readCharacteristic(BluetoothCharacteristic c) async {
+    await bleUtil.readCharacteristic(c);
     setState(() {});
   }
 
-  _writeCharacteristic(BluetoothCharacteristic c) {
-    bleUtil.writeCharacteristic(c);
+  _writeCharacteristic(BluetoothCharacteristic c) async {
+    await bleUtil.writeCharacteristic(c);
     setState(() {});
   }
 
-  _readDescriptor(BluetoothDescriptor d) {
-    bleUtil.readDescriptor(d);
+  _readDescriptor(BluetoothDescriptor d) async {
+    await bleUtil.readDescriptor(d);
     setState(() {});
   }
 
-  _writeDescriptor(BluetoothDescriptor d) {
-    bleUtil.writeDescriptor(d);
+  _writeDescriptor(BluetoothDescriptor d) async {
+    await bleUtil.writeDescriptor(d);
     setState(() {});
   }
 
-  _setNotification(BluetoothCharacteristic c) {
-    bleUtil.setNotification(c);
+  _setNotification(BluetoothCharacteristic c) async {
+    await bleUtil.setNotification(c);
     setState(() {});
   }
 
   _refreshDeviceState(BluetoothDevice d) async {
-    bleUtil.refreshDeviceState(d);
+    await bleUtil.refreshDeviceState(d);
     setState(() {});
   }
 
@@ -105,33 +111,67 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   /// 接続したデバイスのサービスを表示
-  List<Widget> _buildServiceTiles() {
-    return bleUtil.services
-        .map(
-          (s) => new ServiceTile(
-                service: s,
-                characteristicTiles: s.characteristics
-                    .map(
-                      (c) => new CharacteristicTile(
-                            characteristic: c,
-                            onReadPressed: () => _readCharacteristic(c),
-                            onWritePressed: () => _writeCharacteristic(c),
-                            onNotificationPressed: () => _setNotification(c),
-                            descriptorTiles: c.descriptors
-                                .map(
-                                  (d) => new DescriptorTile(
-                                        descriptor: d,
-                                        onReadPressed: () => _readDescriptor(d),
-                                        onWritePressed: () => _writeDescriptor(d),
-                                      ),
-                                )
-                                .toList(),
-                          ),
-                    )
-                    .toList(),
-              ),
-        )
-        .toList();
+  // List<Widget> _buildServiceTiles() {
+  //   return bleUtil.services.map(
+  //     (s) {
+  //       if (s.uuid.toString() != widget.trapModuleServiceUuid) {
+  //         return new ServiceTile(
+  //           service: s,
+  //           characteristicTiles: s.characteristics
+  //               .map(
+  //                 (c) => new CharacteristicTile(
+  //                       characteristic: c,
+  //                       onReadPressed: () => _readCharacteristic(c),
+  //                       onWritePressed: () => _writeCharacteristic(c),
+  //                       onNotificationPressed: () => _setNotification(c),
+  //                       descriptorTiles: c.descriptors
+  //                           .map(
+  //                             (d) => new DescriptorTile(
+  //                                   descriptor: d,
+  //                                   onReadPressed: () => _readDescriptor(d),
+  //                                   onWritePressed: () => _writeDescriptor(d),
+  //                                 ),
+  //                           )
+  //                           .toList(),
+  //                     ),
+  //               )
+  //               .toList(),
+  //         );
+  //       } else {
+  //         for (final BluetoothCharacteristic trapModuleCharacteristic in s.characteristics) {
+  //           if (trapModuleCharacteristic.uuid.toString() != widget.moduleInfoUuid) {
+  //             continue;
+  //           }
+  //           return new ModuleInfoTile(
+  //             moduleInfoCharacteristic: trapModuleCharacteristic,
+  //             onReadPressed: () => _readCharacteristic(trapModuleCharacteristic),
+  //           );
+  //         }
+  //       }
+  //     },
+  //   ).toList();
+  // }
+
+  // モジュール情報タイルを作成
+  List<Widget> _buildModuleInfoTiles() {
+    List<Widget> moduleInfoTiles = new List();
+    for (final BluetoothService trapModuleService in bleUtil.services) {
+      // 罠モジュールサービス以外は無視
+      if (trapModuleService.uuid.toString() != widget.trapModuleServiceUuid) {
+        continue;
+      }
+      for (final BluetoothCharacteristic trapModuleCharacteristic in trapModuleService.characteristics) {
+        // 罠モジュール情報キャラクタリスティック以外は無視
+        if (trapModuleCharacteristic.uuid.toString() != widget.moduleInfoUuid) {
+          continue;
+        }
+        moduleInfoTiles.add(new ModuleInfoTile(
+          moduleInfoCharacteristic: trapModuleCharacteristic,
+          onReadPressed: () => _readCharacteristic(trapModuleCharacteristic),
+        ));
+      }
+    }
+    return moduleInfoTiles;
   }
 
   List<Widget> _buildActionButtons() {
@@ -196,9 +236,11 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     if (bleUtil.isConnected) {
       tiles.add(_buildDeviceStateTile());
       tiles.add(_buildTimerPicker());
-      tiles.addAll(_buildServiceTiles());
+      // tiles.addAll(_buildServiceTiles());
+      tiles.addAll(_buildModuleInfoTiles());
     } else if (widget.isLayoutTest) {
       tiles.add(_buildTimerPicker());
+      tiles.addAll(_buildModuleInfoTiles());
     } else {
       tiles.addAll(_buildScanResultTiles());
     }
