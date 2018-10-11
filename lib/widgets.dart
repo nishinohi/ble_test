@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue/flutter_blue.dart';
-import 'dart:convert';
 
 class ScanResultTile extends StatelessWidget {
   const ScanResultTile({Key key, this.result, this.onTap}) : super(key: key);
@@ -243,86 +242,5 @@ class DescriptorTile extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class ModuleInfoTile extends StatelessWidget {
-  final BluetoothCharacteristic moduleInfoCharacteristic;
-  final VoidCallback onReadPressed;
-  // final VoidCallback onNotificationPressed;
-
-  const ModuleInfoTile({
-    Key key,
-    this.moduleInfoCharacteristic,
-    this.onReadPressed,
-    // this.onNotificationPressed,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    List<Widget> moduleInfoTiles = this.createModuleInfoTiles(context, moduleInfoCharacteristic);
-    print("read moduleInfo");
-
-    return new ExpansionTile(
-      title: new Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          new Text(
-            "Module Info",
-          ),
-        ],
-      ),
-      trailing: new IconButton(
-        icon: new Icon(
-          Icons.sync,
-          color: Theme.of(context).iconTheme.color,
-        ),
-        onPressed: onReadPressed,
-      ),
-      children: moduleInfoTiles,
-    );
-  }
-
-  // モジュール情報リストタイルを作成
-  List<Widget> createModuleInfoTiles(BuildContext context, BluetoothCharacteristic infoCharacteristic) {
-    Map moduleInfoJson;
-    try {
-      moduleInfoJson = jsonDecode(String.fromCharCodes(infoCharacteristic.value));
-    } catch (e) {
-      print(e);
-      // モジュール設定値読み取りエラー
-      return [
-        new ListTile(
-          title: new Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              new Text(
-                "no data available",
-                style: Theme.of(context).textTheme.body1.copyWith(color: Colors.red[300]),
-              )
-            ],
-          ),
-        )
-      ];
-    }
-
-    // json データに従ってリストタイルを作成
-    List<Widget> moduleInfoTiles = new List();
-    moduleInfoJson.keys.forEach((key) {
-      Widget title = new Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          new Text('$key : ${moduleInfoJson[key].toString()}'),
-        ],
-      );
-      moduleInfoTiles.add(new ListTile(
-        title: title,
-      ));
-    });
-
-    return moduleInfoTiles;
   }
 }

@@ -110,6 +110,7 @@ class BleUtil {
     deviceConnection?.cancel();
     deviceConnection = null;
     device = null;
+    services.clear();
   }
 
   Future readCharacteristic(BluetoothCharacteristic c) async {

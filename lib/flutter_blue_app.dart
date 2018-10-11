@@ -3,8 +3,11 @@ import 'package:flutter_blue/flutter_blue.dart';
 import 'package:flutter_blue_example/widgets.dart';
 import 'timer_settting.dart';
 import 'ble_util.dart';
+import 'trap_module.dart';
 
 class FlutterBlueApp extends StatefulWidget {
+  final GlobalKey<TimerPickerState> timerSettingKey = new GlobalKey<TimerPickerState>();
+
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
 
   // Service UUID
@@ -236,7 +239,6 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     if (bleUtil.isConnected) {
       tiles.add(_buildDeviceStateTile());
       tiles.add(_buildTimerPicker());
-      // tiles.addAll(_buildServiceTiles());
       tiles.addAll(_buildModuleInfoTiles());
     } else if (widget.isLayoutTest) {
       tiles.add(_buildTimerPicker());

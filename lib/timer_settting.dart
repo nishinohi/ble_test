@@ -8,14 +8,18 @@ class TimerPicker extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return new _TimerPickerState();
+    return new TimerPickerState();
   }
 }
 
-class _TimerPickerState extends State<TimerPicker> {
+class TimerPickerState extends State<TimerPicker> {
   bool _isStart = true;
+
   TimeOfDay _startTime = new TimeOfDay.now();
   TimeOfDay _endTime = new TimeOfDay.now();
+
+  TimeOfDay get startTime => _startTime;
+  TimeOfDay get endTime => _endTime;
 
   Widget _buildTitle() {
     return new Column(
