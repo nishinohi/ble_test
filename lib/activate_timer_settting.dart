@@ -3,16 +3,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:numberpicker/numberpicker.dart';
 
 /// 稼働時間設定クラス
-class TimerPicker extends StatefulWidget {
-  TimerPicker({Key key}) : super(key: key);
+class ActivateTimeSetting extends StatefulWidget {
+  ActivateTimeSetting({Key key}) : super(key: key);
 
   @override
   State<StatefulWidget> createState() {
-    return new TimerPickerState();
+    return new ActivateTimeSettingState();
   }
 }
 
-class TimerPickerState extends State<TimerPicker> {
+class ActivateTimeSettingState extends State<ActivateTimeSetting> {
   bool _isStart = true;
 
   TimeOfDay _startTime = new TimeOfDay.now();

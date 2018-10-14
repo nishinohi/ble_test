@@ -45,6 +45,7 @@ class BleUtil {
     _scanSubscription = null;
     deviceConnection?.cancel();
     deviceConnection = null;
+    services.clear();
   }
 
   void startScan(VoidCallback onSetState) {
@@ -117,8 +118,8 @@ class BleUtil {
     await device.readCharacteristic(c);
   }
 
-  Future writeCharacteristic(BluetoothCharacteristic c) async {
-    await device.writeCharacteristic(c, [0x41, 0x42], type: CharacteristicWriteType.withResponse);
+  Future writeCharacteristic(BluetoothCharacteristic c, List<int> value) async {
+    await device.writeCharacteristic(c, value, type: CharacteristicWriteType.withResponse);
   }
 
   Future readDescriptor(BluetoothDescriptor d) async {

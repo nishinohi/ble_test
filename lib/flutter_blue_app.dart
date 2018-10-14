@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue/flutter_blue.dart';
 import 'package:flutter_blue_example/widgets.dart';
-import 'timer_settting.dart';
 import 'ble_util.dart';
 import 'trap_module.dart';
 
 class FlutterBlueApp extends StatefulWidget {
-  final GlobalKey<TimerPickerState> timerSettingKey = new GlobalKey<TimerPickerState>();
-
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
 
   // Service UUID
@@ -16,6 +13,7 @@ class FlutterBlueApp extends StatefulWidget {
   final String moduleSettingUuid = "a131c37c-6acb-421d-9640-53bdcd818898";
   final String moduleInfoUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
+  final GlobalKey<ModuleSettingState> _moduleSettingKey = new GlobalKey<ModuleSettingState>();
   final bool isLayoutTest;
   final String title;
 
@@ -25,6 +23,8 @@ class FlutterBlueApp extends StatefulWidget {
 
 class _FlutterBlueAppState extends State<FlutterBlueApp> {
   _FlutterBlueAppState({Key key, this.bleUtil});
+  BluetoothCharacteristic _moduleInfoCharactaristic;
+  BluetoothCharacteristic _moduleSettingCharactaristic;
 
   final BleUtil bleUtil;
 
@@ -38,6 +38,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   void dispose() {
     bleUtil.dispose();
     super.dispose();
+    _clearState();
   }
 
   _startScan() {
@@ -56,7 +57,13 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
 
   _disconnect() {
     bleUtil.disconnect();
+    _clearState();
     setState(() {});
+  }
+
+  _clearState() {
+    _moduleInfoCharactaristic = null;
+    _moduleSettingCharactaristic = null;
   }
 
   _readCharacteristic(BluetoothCharacteristic c) async {
@@ -64,8 +71,8 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     setState(() {});
   }
 
-  _writeCharacteristic(BluetoothCharacteristic c) async {
-    await bleUtil.writeCharacteristic(c);
+  _writeCharacteristic(BluetoothCharacteristic c, List<int> value) async {
+    await bleUtil.writeCharacteristic(c, value);
     setState(() {});
   }
 
@@ -87,6 +94,41 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   _refreshDeviceState(BluetoothDevice d) async {
     await bleUtil.refreshDeviceState(d);
     setState(() {});
+  }
+
+  void _setModuleConfig() async {
+    List<int> config = await widget._moduleSettingKey.currentState.getModuleConfig();
+    if (_moduleSettingCharactaristic == null) {
+      _searchModuleSettingCharactaristic();
+    }
+    bleUtil.writeCharacteristic(_moduleSettingCharactaristic, config);
+  }
+
+  /// 特定のCharactaristicを探す
+  BluetoothCharacteristic _searchCharactaristic(String serviceUuid, String charactaristicUuid) {
+    for (final BluetoothService trapModuleService in bleUtil.services) {
+      // 罠モジュールサービス以外は無視
+      if (trapModuleService.uuid.toString() != serviceUuid) {
+        continue;
+      }
+      for (final BluetoothCharacteristic trapModuleCharacteristic in trapModuleService.characteristics) {
+        // 罠モジュール情報キャラクタリスティック以外は無視
+        if (trapModuleCharacteristic.uuid.toString() == charactaristicUuid) {
+          return trapModuleCharacteristic;
+        }
+      }
+    }
+    return null;
+  }
+
+  bool _searchModuleInfoCharactaristic() {
+    _moduleInfoCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleInfoUuid);
+    return _moduleInfoCharactaristic != null;
+  }
+
+  bool _searchModuleSettingCharactaristic() {
+    _moduleSettingCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleSettingUuid);
+    return _moduleSettingCharactaristic != null;
   }
 
   _buildScanningButton() {
@@ -113,68 +155,27 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
         .toList();
   }
 
-  /// 接続したデバイスのサービスを表示
-  // List<Widget> _buildServiceTiles() {
-  //   return bleUtil.services.map(
-  //     (s) {
-  //       if (s.uuid.toString() != widget.trapModuleServiceUuid) {
-  //         return new ServiceTile(
-  //           service: s,
-  //           characteristicTiles: s.characteristics
-  //               .map(
-  //                 (c) => new CharacteristicTile(
-  //                       characteristic: c,
-  //                       onReadPressed: () => _readCharacteristic(c),
-  //                       onWritePressed: () => _writeCharacteristic(c),
-  //                       onNotificationPressed: () => _setNotification(c),
-  //                       descriptorTiles: c.descriptors
-  //                           .map(
-  //                             (d) => new DescriptorTile(
-  //                                   descriptor: d,
-  //                                   onReadPressed: () => _readDescriptor(d),
-  //                                   onWritePressed: () => _writeDescriptor(d),
-  //                                 ),
-  //                           )
-  //                           .toList(),
-  //                     ),
-  //               )
-  //               .toList(),
-  //         );
-  //       } else {
-  //         for (final BluetoothCharacteristic trapModuleCharacteristic in s.characteristics) {
-  //           if (trapModuleCharacteristic.uuid.toString() != widget.moduleInfoUuid) {
-  //             continue;
-  //           }
-  //           return new ModuleInfoTile(
-  //             moduleInfoCharacteristic: trapModuleCharacteristic,
-  //             onReadPressed: () => _readCharacteristic(trapModuleCharacteristic),
-  //           );
-  //         }
-  //       }
-  //     },
-  //   ).toList();
-  // }
-
   // モジュール情報タイルを作成
-  List<Widget> _buildModuleInfoTiles() {
-    List<Widget> moduleInfoTiles = new List();
-    for (final BluetoothService trapModuleService in bleUtil.services) {
-      // 罠モジュールサービス以外は無視
-      if (trapModuleService.uuid.toString() != widget.trapModuleServiceUuid) {
-        continue;
-      }
-      for (final BluetoothCharacteristic trapModuleCharacteristic in trapModuleService.characteristics) {
-        // 罠モジュール情報キャラクタリスティック以外は無視
-        if (trapModuleCharacteristic.uuid.toString() != widget.moduleInfoUuid) {
-          continue;
-        }
-        moduleInfoTiles.add(new ModuleInfoTile(
-          moduleInfoCharacteristic: trapModuleCharacteristic,
-          onReadPressed: () => _readCharacteristic(trapModuleCharacteristic),
-        ));
-      }
+  Widget _buildModuleInfoTiles() {
+    if (_moduleInfoCharactaristic == null) {
+      _searchModuleInfoCharactaristic();
     }
-    return moduleInfoTiles;
+    return new ModuleInfoTile(
+      moduleInfoCharacteristic: _moduleInfoCharactaristic,
+      onReadPressed: () => _readCharacteristic(_moduleInfoCharactaristic),
+    );
+  }
+
+  /// モジュール設定用タイル作成
+  Widget _buildModuleSettingTiles() {
+    if (_moduleSettingCharactaristic == null) {
+      _searchModuleSettingCharactaristic();
+    }
+    return new ModuleSetting(
+      key: widget._moduleSettingKey,
+      moduleSettingCharacteristic: _moduleSettingCharactaristic,
+      onWrite: () => _setModuleConfig(),
+    );
   }
 
   List<Widget> _buildActionButtons() {
@@ -223,10 +224,6 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     return new LinearProgressIndicator();
   }
 
-  Widget _buildTimerPicker() {
-    return new TimerPicker();
-  }
-
   // 画面描画
   @override
   Widget build(BuildContext context) {
@@ -238,11 +235,11 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     }
     if (bleUtil.isConnected) {
       tiles.add(_buildDeviceStateTile());
-      tiles.add(_buildTimerPicker());
-      tiles.addAll(_buildModuleInfoTiles());
+      tiles.add(_buildModuleSettingTiles());
+      tiles.add(_buildModuleInfoTiles());
     } else if (widget.isLayoutTest) {
-      tiles.add(_buildTimerPicker());
-      tiles.addAll(_buildModuleInfoTiles());
+      tiles.add(_buildModuleSettingTiles());
+      tiles.add(_buildModuleInfoTiles());
     } else {
       tiles.addAll(_buildScanResultTiles());
     }

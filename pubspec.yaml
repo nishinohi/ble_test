@@ -4,8 +4,10 @@ description: Demonstrates how to use the flutter_blue plugin.
 dependencies:
   flutter:
     sdk: flutter
-  flutter_blue: 0.4.0
-  numberpicker : 0.1.7
+  flutter_blue: ^0.4.0
+  numberpicker : ^0.1.7
+  geolocator: ^2.1.0
+  # location: ^1.4.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://www.dartlang.org/tools/pub/pubspec
