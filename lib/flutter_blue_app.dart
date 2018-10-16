@@ -3,6 +3,9 @@ import 'package:flutter_blue/flutter_blue.dart';
 import 'package:flutter_blue_example/widgets.dart';
 import 'ble_util.dart';
 import 'trap_module.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class FlutterBlueApp extends StatefulWidget {
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
@@ -29,6 +32,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   BluetoothCharacteristic _moduleSettingCharactaristic;
 
   final BleUtil bleUtil;
+  GeolocationStatus _geoStatus = GeolocationStatus.unknown;
 
   @override
   void initState() {
@@ -101,6 +105,16 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     setState(() {});
   }
 
+  // GPS の状態を更新
+  void _updateGpsStatu() async {
+    try {
+      _geoStatus = await new Geolocator().checkGeolocationPermissionStatus();
+      setState(() {});
+    } on PlatformException catch (e) {
+      print(e);
+    }
+  }
+
   void _setModuleConfig() async {
     List<int> config = await widget._moduleSettingKey.currentState.getModuleConfig();
     if (_moduleSettingCharactaristic == null) {
@@ -137,7 +151,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   _buildScanningButton() {
-    if (bleUtil.isConnected || bleUtil.state != BluetoothState.on) {
+    if (bleUtil.isConnected || bleUtil.state != BluetoothState.on || _geoStatus != GeolocationStatus.granted) {
       return null;
     }
     if (bleUtil.isScanning) {
@@ -151,6 +165,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     }
   }
 
+  // TrapModuleのデバイス名を持つBLEのみ表示する
   List<Widget> _buildScanResultTiles() {
     List<Widget> scanResultTiles = new List();
     for (final scanResult in bleUtil.scanResults.values) {
@@ -204,12 +219,14 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     return null;
   }
 
-  Widget _buildAlertTile() {
+  // エラータイル作成
+  Widget _buildAlertTile(String alertMessage) {
     return new Container(
       color: Colors.redAccent,
       child: new ListTile(
         title: new Text(
-          'Bluetooth adapter is ${bleUtil.state.toString().substring(15)}',
+          alertMessage,
+          // 'Bluetooth adapter is ${bleUtil.state.toString().substring(15)}',
           style: Theme.of(context).primaryTextTheme.subhead,
         ),
         trailing: new Icon(
@@ -244,7 +261,13 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     var tiles = new List<Widget>();
     if (bleUtil.state != BluetoothState.on) {
       if (!widget.isLayoutTest) {
-        tiles.add(_buildAlertTile());
+        tiles.add(_buildAlertTile('Bluetooth adapter is ${bleUtil.state.toString().substring(15)}'));
+      }
+    }
+    _updateGpsStatu();
+    if (_geoStatus != GeolocationStatus.granted) {
+      if (!widget.isLayoutTest) {
+        tiles.add(_buildAlertTile('GPS status is ${describeEnum(_geoStatus)}'));
       }
     }
     if (bleUtil.isConnected) {
