@@ -12,6 +12,8 @@ class FlutterBlueApp extends StatefulWidget {
   // Charactaristic UUID
   final String moduleSettingUuid = "a131c37c-6acb-421d-9640-53bdcd818898";
   final String moduleInfoUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+  // deviceNamePrefix
+  final String deviceNamePrefix = 'TrapModuleSetting';
 
   final GlobalKey<ModuleSettingState> _moduleSettingKey = new GlobalKey<ModuleSettingState>();
   final bool isLayoutTest;
@@ -51,6 +53,9 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   _connect(BluetoothDevice d) async {
+    if (bleUtil.isScanning) {
+      _stopScan();
+    }
     bleUtil.connect(() => setState(() {}), d);
     setState(() {});
   }
@@ -146,13 +151,21 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     }
   }
 
-  _buildScanResultTiles() {
-    return bleUtil.scanResults.values
-        .map((r) => ScanResultTile(
-              result: r,
-              onTap: () => _connect(r.device),
-            ))
-        .toList();
+  List<Widget> _buildScanResultTiles() {
+    List<Widget> scanResultTiles = new List();
+    for (final scanResult in bleUtil.scanResults.values) {
+      if (scanResult.device.name.length <= 0) {
+        continue;
+      }
+      if (!scanResult.device.name.contains(widget.deviceNamePrefix)) {
+        continue;
+      }
+      scanResultTiles.add(new ScanResultTile(
+        result: scanResult,
+        onTap: () => _connect(scanResult.device),
+      ));
+    }
+    return scanResultTiles;
   }
 
   // モジュール情報タイルを作成
@@ -175,6 +188,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
       key: widget._moduleSettingKey,
       moduleSettingCharacteristic: _moduleSettingCharactaristic,
       onWrite: () => _setModuleConfig(),
+      state: bleUtil.deviceState,
     );
   }
 
@@ -234,6 +248,7 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
       }
     }
     if (bleUtil.isConnected) {
+      print(bleUtil.deviceState);
       tiles.add(_buildDeviceStateTile());
       tiles.add(_buildModuleSettingTiles());
       tiles.add(_buildModuleInfoTiles());

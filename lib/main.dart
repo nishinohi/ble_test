@@ -18,9 +18,7 @@ class MyApp extends StatelessWidget {
       theme: new ThemeData(
         primaryColor: Colors.blue,
       ),
-      home: new FlutterBlueApp(
-        isLayoutTest: false,
-      ),
+      home: new FlutterBlueApp(isLayoutTest: false),
     );
   }
 }

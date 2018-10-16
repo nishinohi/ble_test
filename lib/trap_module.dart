@@ -97,6 +97,8 @@ class ModuleInfoTileState extends State<ModuleInfoTile> {
 class ModuleSetting extends StatefulWidget {
   final BluetoothCharacteristic moduleSettingCharacteristic;
   final VoidCallback onWrite;
+  final BluetoothDeviceState state;
+
   // 設定値JSONキー
   static final String keyWorkTime = "work_time";
   static final String keyActiveStart = "active_start";
@@ -114,6 +116,7 @@ class ModuleSetting extends StatefulWidget {
     Key key,
     this.moduleSettingCharacteristic,
     this.onWrite,
+    this.state,
   }) : super(key: key);
 
   @override
@@ -161,8 +164,10 @@ class ModuleSettingState extends State<ModuleSetting> {
     String temp = json.encode(configMap);
     List<int> config = utf8.encode(temp);
     return config;
+    // return null;
   }
 
+  /// モジュール設定ボタン
   Widget _buildSettingButton() {
     return new Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -174,7 +179,7 @@ class ModuleSettingState extends State<ModuleSetting> {
           ),
           textColor: Colors.white,
           color: Colors.blue,
-          onPressed: () => _confirmTrapStart(),
+          onPressed: widget.state == BluetoothDeviceState.connected ? () => _confirmTrapStart() : null,
         ),
       ],
     );
