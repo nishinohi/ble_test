@@ -142,6 +142,9 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
       scanResultTiles.add(new ScanResultTile(
         result: scanResult,
         onTap: () => _connect(scanResult.device),
+        connectedId: (bleUtil.deviceState == BluetoothDeviceState.connected && bleUtil.device != null)
+            ? bleUtil.device.id.toString()
+            : "",
       ));
     }
     return scanResultTiles;
