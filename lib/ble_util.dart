@@ -23,16 +23,26 @@ class BleUtil {
   Map<Guid, StreamSubscription> valueChangedSubscriptions = {};
   BluetoothDeviceState deviceState = BluetoothDeviceState.disconnected;
 
-  void initState(VoidCallback onSetState) {
+  // setState
+  VoidCallback _homeSetState;
+  set homeSetState(VoidCallback homeSetState) {
+    _homeSetState = homeSetState != null ? homeSetState : () {};
+  }
+
+  VoidCallback _setState;
+  set setState(VoidCallback setState) => _setState = setState;
+
+  void initState(VoidCallback homeSetState) {
+    _homeSetState = homeSetState;
     // Immediately get the state of FlutterBlue
     _flutterBlue.state.then((s) {
       state = s;
-      onSetState();
+      _setState != null ? _setState() : _homeSetState();
     });
     // Subscribe to state changes
     _stateSubscription = _flutterBlue.onStateChanged().listen((s) {
       state = s;
-      onSetState();
+      _setState != null ? _setState() : _homeSetState();
     });
   }
 
@@ -48,7 +58,7 @@ class BleUtil {
     services.clear();
   }
 
-  void startScan(VoidCallback onSetState) {
+  void startScan() {
     _scanSubscription = _flutterBlue
         .scan(
       timeout: const Duration(seconds: 10),
@@ -61,11 +71,11 @@ class BleUtil {
       print('manufacturerData: ${scanResult.advertisementData.manufacturerData}');
       print('serviceData: ${scanResult.advertisementData.serviceData}');
       scanResults[scanResult.device.id] = scanResult;
-      onSetState();
+      _setState != null ? _setState() : _homeSetState();
     }, onDone: stopScan);
 
     isScanning = true;
-    onSetState();
+    _setState != null ? _setState() : _homeSetState();
   }
 
   void stopScan() {
@@ -74,31 +84,37 @@ class BleUtil {
     isScanning = false;
   }
 
-  void connect(VoidCallback onSetState, BluetoothDevice d) async {
+  void connect(VoidCallback onStateChange, BluetoothDevice d) {
     device = d;
     // Connect to device
-    deviceConnection = _flutterBlue.connect(device, timeout: const Duration(seconds: 4)).listen(
-          null,
-          onDone: disconnect,
-        );
+    if (deviceState != BluetoothDeviceState.connected) {
+      deviceConnection = _flutterBlue.connect(device, timeout: const Duration(seconds: 5)).listen(
+        null,
+        onDone: () {
+          disconnect();
+          onStateChange();
+          _setState != null ? _setState() : _homeSetState();
+        },
+      );
+    }
 
     // Update the connection state immediately
     device.state.then((s) {
       deviceState = s;
-      onSetState();
+      onStateChange();
+      _setState != null ? _setState() : _homeSetState();
     });
 
     // Subscribe to connection changes
     deviceStateSubscription = device.onStateChanged().listen((s) {
       deviceState = s;
-      onSetState();
-
       if (s == BluetoothDeviceState.connected) {
         device.discoverServices().then((s) {
           services = s;
-          onSetState();
         });
       }
+      onStateChange();
+      _setState != null ? _setState() : _homeSetState();
     });
   }
 
@@ -108,6 +124,7 @@ class BleUtil {
     valueChangedSubscriptions.clear();
     deviceStateSubscription?.cancel();
     deviceStateSubscription = null;
+    deviceState = BluetoothDeviceState.disconnected;
     deviceConnection?.cancel();
     deviceConnection = null;
     device = null;

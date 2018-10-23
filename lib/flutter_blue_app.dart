@@ -6,19 +6,12 @@ import 'trap_module.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'common_color_theme.dart';
 
 class FlutterBlueApp extends StatefulWidget {
   FlutterBlueApp({Key key, this.title, this.isLayoutTest}) : super(key: key);
-
-  // Service UUID
-  final String trapModuleServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-  // Charactaristic UUID
-  final String moduleSettingUuid = "a131c37c-6acb-421d-9640-53bdcd818898";
-  final String moduleInfoUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
   // deviceNamePrefix
   final String deviceNamePrefix = 'TrapModuleSetting';
-
-  final GlobalKey<ModuleSettingState> _moduleSettingKey = new GlobalKey<ModuleSettingState>();
   final bool isLayoutTest;
   final String title;
 
@@ -28,11 +21,10 @@ class FlutterBlueApp extends StatefulWidget {
 
 class _FlutterBlueAppState extends State<FlutterBlueApp> {
   _FlutterBlueAppState({Key key, this.bleUtil});
-  BluetoothCharacteristic _moduleInfoCharactaristic;
-  BluetoothCharacteristic _moduleSettingCharactaristic;
 
   final BleUtil bleUtil;
   GeolocationStatus _geoStatus = GeolocationStatus.unknown;
+  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -44,11 +36,10 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   void dispose() {
     bleUtil.dispose();
     super.dispose();
-    _clearState();
   }
 
   _startScan() {
-    bleUtil.startScan(() => setState(() {}));
+    bleUtil.startScan();
   }
 
   _stopScan() {
@@ -57,22 +48,27 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
   }
 
   _connect(BluetoothDevice d) async {
+    _isConnecting = true;
     if (bleUtil.isScanning) {
       _stopScan();
     }
-    bleUtil.connect(() => setState(() {}), d);
+    bleUtil.connect(() {
+      // 接続確立
+      if (bleUtil.deviceState == BluetoothDeviceState.connected) {
+        _isConnecting = false;
+        _pushTrapModuleWidget();
+      }
+      // タイムアウト
+      if (bleUtil.device == null) {
+        _isConnecting = false;
+      }
+    }, d);
     setState(() {});
   }
 
   _disconnect() {
     bleUtil.disconnect();
-    _clearState();
     setState(() {});
-  }
-
-  _clearState() {
-    _moduleInfoCharactaristic = null;
-    _moduleSettingCharactaristic = null;
   }
 
   _readCharacteristic(BluetoothCharacteristic c) async {
@@ -107,47 +103,15 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
 
   // GPS の状態を更新
   void _updateGpsStatu() async {
+    if (_geoStatus == GeolocationStatus.granted) {
+      return;
+    }
     try {
       _geoStatus = await new Geolocator().checkGeolocationPermissionStatus();
       setState(() {});
     } on PlatformException catch (e) {
       print(e);
     }
-  }
-
-  void _setModuleConfig() async {
-    List<int> config = await widget._moduleSettingKey.currentState.getModuleConfig();
-    if (_moduleSettingCharactaristic == null) {
-      _searchModuleSettingCharactaristic();
-    }
-    bleUtil.writeCharacteristic(_moduleSettingCharactaristic, config);
-  }
-
-  /// 特定のCharactaristicを探す
-  BluetoothCharacteristic _searchCharactaristic(String serviceUuid, String charactaristicUuid) {
-    for (final BluetoothService trapModuleService in bleUtil.services) {
-      // 罠モジュールサービス以外は無視
-      if (trapModuleService.uuid.toString() != serviceUuid) {
-        continue;
-      }
-      for (final BluetoothCharacteristic trapModuleCharacteristic in trapModuleService.characteristics) {
-        // 罠モジュール情報キャラクタリスティック以外は無視
-        if (trapModuleCharacteristic.uuid.toString() == charactaristicUuid) {
-          return trapModuleCharacteristic;
-        }
-      }
-    }
-    return null;
-  }
-
-  bool _searchModuleInfoCharactaristic() {
-    _moduleInfoCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleInfoUuid);
-    return _moduleInfoCharactaristic != null;
-  }
-
-  bool _searchModuleSettingCharactaristic() {
-    _moduleSettingCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleSettingUuid);
-    return _moduleSettingCharactaristic != null;
   }
 
   _buildScanningButton() {
@@ -183,40 +147,14 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     return scanResultTiles;
   }
 
-  // モジュール情報タイルを作成
-  Widget _buildModuleInfoTiles() {
-    if (_moduleInfoCharactaristic == null) {
-      _searchModuleInfoCharactaristic();
-    }
-    return new ModuleInfoTile(
-      moduleInfoCharacteristic: _moduleInfoCharactaristic,
-      onReadPressed: () => _readCharacteristic(_moduleInfoCharactaristic),
-    );
-  }
-
-  /// モジュール設定用タイル作成
-  Widget _buildModuleSettingTiles() {
-    if (_moduleSettingCharactaristic == null) {
-      _searchModuleSettingCharactaristic();
-    }
-    return new ModuleSetting(
-      key: widget._moduleSettingKey,
-      moduleSettingCharacteristic: _moduleSettingCharactaristic,
-      onWrite: () => _setModuleConfig(),
-      state: bleUtil.deviceState,
-    );
-  }
-
-  List<Widget> _buildActionButtons() {
-    if (bleUtil.isConnected) {
-      return <Widget>[
-        new IconButton(
-          icon: const Icon(Icons.cancel),
-          onPressed: () => _disconnect(),
-        )
-      ];
-    }
-    return null;
+  List<Widget> _buildDisconnectButtons() {
+    // if (bleUtil.isConnected) {
+    return <Widget>[
+      new IconButton(
+        icon: const Icon(Icons.cancel),
+        onPressed: () => _disconnect(),
+      )
+    ];
   }
 
   // エラータイル作成
@@ -237,54 +175,59 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
     );
   }
 
-  Widget _buildDeviceStateTile() {
-    return new ListTile(
-        leading: (bleUtil.deviceState == BluetoothDeviceState.connected)
-            ? const Icon(Icons.bluetooth_connected)
-            : const Icon(Icons.bluetooth_disabled),
-        title: new Text('Device is ${bleUtil.deviceState.toString().split('.')[1]}.'),
-        subtitle: new Text('${bleUtil.device.id}'),
-        trailing: new IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: () => _refreshDeviceState(bleUtil.device),
-          color: Theme.of(context).iconTheme.color.withOpacity(0.5),
-        ));
-  }
-
   Widget _buildProgressBarTile() {
     return new LinearProgressIndicator();
+  }
+
+  Widget _buildConnectIndicator() {
+    return new Stack(
+      children: <Widget>[
+        new Opacity(
+          opacity: 0.3,
+          child: const ModalBarrier(
+            dismissible: false,
+            color: Colors.grey,
+          ),
+        ),
+        new Center(
+          child: new CircularProgressIndicator(),
+        )
+      ],
+    );
+  }
+
+  // 罠モジュール設定画面へ遷移
+  void _pushTrapModuleWidget() {
+    if (Navigator.of(context).canPop()) {
+      return;
+    }
+    Navigator.of(context).push(new MaterialPageRoute<void>(
+      builder: (BuildContext context) {
+        return new TrapModule(
+          bleUtil: bleUtil,
+        );
+      },
+    ));
   }
 
   // 画面描画
   @override
   Widget build(BuildContext context) {
     var tiles = new List<Widget>();
+    // Bluetooth、gps のアクティベートを確認
     if (bleUtil.state != BluetoothState.on) {
-      if (!widget.isLayoutTest) {
-        tiles.add(_buildAlertTile('Bluetooth adapter is ${bleUtil.state.toString().substring(15)}'));
-      }
+      tiles.add(_buildAlertTile('Bluetooth adapter is ${bleUtil.state.toString().substring(15)}'));
+    }
+    if (_geoStatus != GeolocationStatus.granted) {
+      tiles.add(_buildAlertTile('GPS status is ${describeEnum(_geoStatus)}'));
     }
     _updateGpsStatu();
-    if (_geoStatus != GeolocationStatus.granted) {
-      if (!widget.isLayoutTest) {
-        tiles.add(_buildAlertTile('GPS status is ${describeEnum(_geoStatus)}'));
-      }
-    }
-    if (bleUtil.isConnected) {
-      print(bleUtil.deviceState);
-      tiles.add(_buildDeviceStateTile());
-      tiles.add(_buildModuleSettingTiles());
-      tiles.add(_buildModuleInfoTiles());
-    } else if (widget.isLayoutTest) {
-      tiles.add(_buildModuleSettingTiles());
-      tiles.add(_buildModuleInfoTiles());
-    } else {
-      tiles.addAll(_buildScanResultTiles());
-    }
+    // 周辺の罠モジュールを表示
+    tiles.addAll(_buildScanResultTiles());
     return new Scaffold(
       appBar: new AppBar(
-        title: const Text('Trap Module Config'),
-        actions: _buildActionButtons(),
+        title: const Text('Trap Module'),
+        actions: _buildDisconnectButtons(),
       ),
       floatingActionButton: _buildScanningButton(),
       body: new Stack(
@@ -292,7 +235,8 @@ class _FlutterBlueAppState extends State<FlutterBlueApp> {
           (bleUtil.isScanning) ? _buildProgressBarTile() : new Container(),
           new ListView(
             children: tiles,
-          )
+          ),
+          _isConnecting ? _buildConnectIndicator() : new Container(),
         ],
       ),
     );

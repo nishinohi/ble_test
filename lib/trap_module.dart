@@ -5,6 +5,176 @@ import 'dart:convert';
 import 'activate_timer_settting.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
+import 'ble_util.dart';
+import 'common_color_theme.dart';
+
+class TrapModule extends StatefulWidget {
+  final GlobalKey<ModuleSettingState> _moduleSettingKey = new GlobalKey<ModuleSettingState>();
+  // Service UUID
+  final String trapModuleServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  // Charactaristic UUID
+  final String moduleSettingUuid = "a131c37c-6acb-421d-9640-53bdcd818898";
+  final String moduleInfoUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+  final BleUtil bleUtil;
+  TrapModule({Key key, this.bleUtil});
+
+  @override
+  State<StatefulWidget> createState() {
+    return new TrapModuleState();
+  }
+}
+
+class TrapModuleState extends State<TrapModule> {
+  BluetoothCharacteristic _moduleInfoCharactaristic;
+  BluetoothCharacteristic _moduleSettingCharactaristic;
+
+  TrapModuleState({Key key});
+
+  @override
+  void initState() {
+    super.initState();
+    widget.bleUtil.setState = () => setState(() {});
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  /// BLE Util
+  Future<void> _readCharacteristic(BluetoothCharacteristic c) async {
+    await widget.bleUtil.readCharacteristic(c);
+    setState(() {});
+  }
+
+  Future<void> _writeCharacteristic(BluetoothCharacteristic c, List<int> value) async {
+    await widget.bleUtil.writeCharacteristic(c, value);
+    setState(() {});
+  }
+
+  Future<void> _refreshDeviceState(BluetoothDevice d) async {
+    await widget.bleUtil.refreshDeviceState(d);
+    setState(() {});
+  }
+
+  /// 特定のCharactaristicを探す
+  BluetoothCharacteristic _searchCharactaristic(String serviceUuid, String charactaristicUuid) {
+    for (final BluetoothService trapModuleService in widget.bleUtil.services) {
+      // 罠モジュールサービス以外は無視
+      if (trapModuleService.uuid.toString() != serviceUuid) {
+        continue;
+      }
+      for (final BluetoothCharacteristic trapModuleCharacteristic in trapModuleService.characteristics) {
+        // 罠モジュール情報キャラクタリスティック以外は無視
+        if (trapModuleCharacteristic.uuid.toString() == charactaristicUuid) {
+          return trapModuleCharacteristic;
+        }
+      }
+    }
+    return null;
+  }
+
+  bool _searchModuleInfoCharactaristic() {
+    _moduleInfoCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleInfoUuid);
+    return _moduleInfoCharactaristic != null;
+  }
+
+  bool _searchModuleSettingCharactaristic() {
+    _moduleSettingCharactaristic = _searchCharactaristic(widget.trapModuleServiceUuid, widget.moduleSettingUuid);
+    return _moduleSettingCharactaristic != null;
+  }
+
+  // モジュール情報タイルを作成
+  Widget _buildModuleInfoTiles() {
+    if (_moduleInfoCharactaristic == null) {
+      _searchModuleInfoCharactaristic();
+    }
+    return new ModuleInfoTile(
+      moduleInfoCharacteristic: _moduleInfoCharactaristic,
+      onReadPressed: () => _readCharacteristic(_moduleInfoCharactaristic),
+    );
+  }
+
+  /// モジュール設定用タイル作成
+  Widget _buildModuleSettingTiles() {
+    if (_moduleSettingCharactaristic == null) {
+      _searchModuleSettingCharactaristic();
+    }
+    return new ModuleSetting(
+      key: widget._moduleSettingKey,
+      moduleSettingCharacteristic: _moduleSettingCharactaristic,
+      onWrite: () => _setModuleConfig(),
+      state: widget.bleUtil.deviceState,
+    );
+  }
+
+  Widget _buildGpsStateTile() {
+    return new ListTile(
+      leading: Icon(
+        Icons.gps_not_fixed,
+        color: CommonColorTheme.iconDeactive,
+      ),
+      title: new Text("location has not enabled"),
+    );
+  }
+
+  Widget _buildDeviceStateTile() {
+    return new ListTile(
+        leading: (widget.bleUtil.deviceState == BluetoothDeviceState.connected)
+            ? const Icon(Icons.bluetooth_connected)
+            : const Icon(Icons.bluetooth_disabled),
+        title: new Text('Device is ${widget.bleUtil.deviceState.toString().split('.')[1]}.'),
+        subtitle: new Text('${widget.bleUtil.device.id}'),
+        trailing: new IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: () => _refreshDeviceState(widget.bleUtil.device),
+          color: Theme.of(context).iconTheme.color.withOpacity(0.5),
+        ));
+  }
+
+  // 戻るボタンコールバック
+  Future<bool> _onBackPressed() {
+    widget.bleUtil.setState = null;
+    Navigator.pop(context, true);
+    return new Future(() => false);
+  }
+
+  void _setModuleConfig() async {
+    List<int> config = await widget._moduleSettingKey.currentState.getModuleConfig();
+    if (_moduleSettingCharactaristic == null) {
+      _searchModuleSettingCharactaristic();
+    }
+    _writeCharacteristic(_moduleSettingCharactaristic, config);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    List<Widget> tiles = new List();
+    tiles.add(_buildDeviceStateTile());
+    tiles.add(_buildGpsStateTile());
+    tiles.add(_buildModuleSettingTiles());
+    tiles.add(_buildModuleInfoTiles());
+    return WillPopScope(
+      onWillPop: _onBackPressed,
+      child: new Scaffold(
+        appBar: new AppBar(
+          title: const Text('Trap Module Config'),
+          leading: new IconButton(
+              icon: new Icon(Icons.arrow_back),
+              onPressed: () {
+                widget.bleUtil.setState = null;
+                Navigator.pop(context, true);
+              }),
+        ),
+        body: new ListView(
+          children: tiles,
+        ),
+      ),
+    );
+    ;
+  }
+}
 
 class ModuleInfoTile extends StatefulWidget {
   final BluetoothCharacteristic moduleInfoCharacteristic;
@@ -28,7 +198,6 @@ class ModuleInfoTileState extends State<ModuleInfoTile> {
   @override
   Widget build(BuildContext context) {
     List<Widget> moduleInfoTiles = this._createModuleInfoTiles(context, widget.moduleInfoCharacteristic);
-    print("read moduleInfo");
 
     return new ExpansionTile(
       title: new Column(
@@ -164,7 +333,6 @@ class ModuleSettingState extends State<ModuleSetting> {
     String temp = json.encode(configMap);
     List<int> config = utf8.encode(temp);
     return config;
-    // return null;
   }
 
   /// モジュール設定ボタン
