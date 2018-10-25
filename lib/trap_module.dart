@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
 import 'ble_util.dart';
 import 'common_color_theme.dart';
+import 'location_util.dart';
 
 class TrapModule extends StatefulWidget {
   final GlobalKey<ModuleSettingState> _moduleSettingKey = new GlobalKey<ModuleSettingState>();
@@ -28,12 +29,21 @@ class TrapModule extends StatefulWidget {
 class TrapModuleState extends State<TrapModule> {
   BluetoothCharacteristic _moduleInfoCharactaristic;
   BluetoothCharacteristic _moduleSettingCharactaristic;
+  LocationUtil locationutil = LocationUtil();
+  bool _gpsEnable = false;
 
   TrapModuleState({Key key});
 
   @override
   void initState() {
     super.initState();
+    locationutil.init().then((bool gpsEnable) {
+      _gpsEnable = gpsEnable;
+      if (gpsEnable) {
+        locationutil.setPositionStream(() => setState(() {}));
+      }
+      setState(() {});
+    });
     widget.bleUtil.setState = () => setState(() {});
   }
 
@@ -44,6 +54,7 @@ class TrapModuleState extends State<TrapModule> {
 
   /// BLE Util
   Future<void> _readCharacteristic(BluetoothCharacteristic c) async {
+    // await _refreshDeviceState(widget.bleUtil.device);
     await widget.bleUtil.readCharacteristic(c);
     setState(() {});
   }
@@ -92,7 +103,10 @@ class TrapModuleState extends State<TrapModule> {
     }
     return new ModuleInfoTile(
       moduleInfoCharacteristic: _moduleInfoCharactaristic,
-      onReadPressed: () => _readCharacteristic(_moduleInfoCharactaristic),
+      onReadPressed: () {
+        _refreshDeviceState(widget.bleUtil.device);
+        _readCharacteristic(_moduleInfoCharactaristic);
+      },
     );
   }
 
@@ -109,21 +123,44 @@ class TrapModuleState extends State<TrapModule> {
     );
   }
 
-  Widget _buildGpsStateTile() {
-    return new ListTile(
-      leading: Icon(
-        Icons.gps_not_fixed,
-        color: CommonColorTheme.iconDeactive,
-      ),
-      title: new Text("location has not enabled"),
+  Widget _buildGpsInfoTile() {
+    Icon gpsIcon;
+    Text locationStr;
+    // 現在地未取得かGPSがOFFになっている
+    if (!_gpsEnable || locationutil.currentPosition == null) {
+      gpsIcon = _gpsEnable
+          ? Icon(Icons.gps_not_fixed, color: CommonColorTheme.iconActive)
+          : Icon(Icons.gps_off, color: CommonColorTheme.iconDeactive);
+      locationStr = new Text(
+        _gpsEnable ? "location finding..." : "GPS Deactive",
+        style: Theme.of(context).textTheme.subhead,
+      );
+      return new ListTile(
+        leading: gpsIcon,
+        title: locationStr,
+        trailing: _gpsEnable ? null : new Icon(Icons.error, color: CommonColorTheme.alertColor),
+      );
+    }
+    // 現在地取得済
+    gpsIcon = new Icon(Icons.gps_fixed, color: CommonColorTheme.iconActive);
+    return new ExpansionTile(
+      leading: gpsIcon,
+      title: new Text("Gps is Active", style: Theme.of(context).textTheme.subhead),
+      children: locationutil.buildGpsInfoTiles(context),
     );
   }
 
   Widget _buildDeviceStateTile() {
     return new ListTile(
         leading: (widget.bleUtil.deviceState == BluetoothDeviceState.connected)
-            ? const Icon(Icons.bluetooth_connected)
-            : const Icon(Icons.bluetooth_disabled),
+            ? Icon(
+                Icons.bluetooth_connected,
+                color: CommonColorTheme.iconActive,
+              )
+            : Icon(
+                Icons.bluetooth_disabled,
+                color: CommonColorTheme.iconDeactive,
+              ),
         title: new Text('Device is ${widget.bleUtil.deviceState.toString().split('.')[1]}.'),
         subtitle: new Text('${widget.bleUtil.device.id}'),
         trailing: new IconButton(
@@ -152,7 +189,7 @@ class TrapModuleState extends State<TrapModule> {
   Widget build(BuildContext context) {
     List<Widget> tiles = new List();
     tiles.add(_buildDeviceStateTile());
-    tiles.add(_buildGpsStateTile());
+    tiles.add(_buildGpsInfoTile());
     tiles.add(_buildModuleSettingTiles());
     tiles.add(_buildModuleInfoTiles());
     return WillPopScope(
